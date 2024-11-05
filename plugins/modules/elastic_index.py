@@ -110,6 +110,27 @@ from ansible_collections.community.elastic.plugins.module_utils.elastic_common i
     ElasticHelpers
 )
 
+def transform_aliases_list(aliases_list):
+    """
+    Transforms a list of alias definitions into a dictionary,
+    using the 'name' field as the key. Ansible can't expand variables in property-names
+
+    :param aliases_list: List of alias definitions (dictionaries)
+    :return: Dictionary with expanded keys and corresponding values
+    """
+    aliases_dict = {}
+    for alias in aliases_list:
+        raw_name = alias.get('name')
+        if raw_name is None:
+            continue  # Skip if there's no 'name' field
+
+        # Copy the alias and remove the 'name' field
+        alias_copy = alias.copy()
+        del alias_copy['name']
+
+        # Add the expanded alias to the dictionary
+        aliases_dict[raw_name] = alias_copy
+    return aliases_dict
 
 # ================
 # Module execution
@@ -136,6 +157,7 @@ def main():
         state=dict(type='str', choices=state_choices, default='present'),
         settings=dict(type='dict', default={}),
         mappings=dict(type='dict', default={}),
+        aliases=dict(type='list', default={}),
         wait_for_active_shards=dict(type='str', default='0'),
     )
 
@@ -153,6 +175,7 @@ def main():
     settings = module.params['settings']
     mappings = module.params['mappings']
     state = module.params['state']
+    aliases = transform_aliases_list(module.params['aliases'])
 
     # TODO main module logic
     try:
@@ -163,7 +186,7 @@ def main():
             if client.indices.exists(index=name):
                 module.exit_json(changed=False, msg="The index '{0}' already exists.".format(name))
             else:
-                request_body = {"settings": settings, "mappings": mappings}
+                request_body = {"settings": settings, "mappings": mappings, "aliases": aliases}
                 if module.check_mode:
                     response = {"acknowledged": True}
                 else:
